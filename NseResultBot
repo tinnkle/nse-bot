@@ -1,0 +1,156 @@
+import json, logging, time
+from datetime import datetime, timedelta
+from pathlib import Path
+import requests, schedule
+
+BOT_TOKEN  = "8735425549:AAGF6XSW4Lz9iqXhRf4PGSAg4dyGCE260Rk"
+CHANNEL_ID = "@nseresultstinin"
+
+WATCHLIST = {
+    "RELIANCE","TCS","HDFCBANK","ICICIBANK","INFY","HINDUNILVR","SBIN","BHARTIARTL",
+    "BAJFINANCE","KOTAKBANK","LT","AXISBANK","ASIANPAINT","MARUTI","TITAN","SUNPHARMA",
+    "WIPRO","ULTRACEMCO","NESTLEIND","TECHM","HCLTECH","ONGC","NTPC","POWERGRID",
+    "COALINDIA","ADANIENT","ADANIPORTS","JSWSTEEL","TATASTEEL","HINDALCO",
+    "INDUSINDBK","BAJAJFINSV","BAJAJ-AUTO","HEROMOTOCO","EICHERMOT","BRITANNIA",
+    "DRREDDY","CIPLA","DIVISLAB","APOLLOHOSP","GRASIM","BPCL","TATAPOWER",
+    "ADANIGREEN","ADANITRANS","IOC","HDFCLIFE","SBILIFE","ICICIPRULI","UPL",
+    "AMBUJACEM","ACC","ABBOTINDIA","AUROPHARMA","BANDHANBNK","BERGEPAINT",
+    "BIOCON","BOSCHLTD","CHOLAFIN","COLPAL","CONCOR","CUMMINSIND","DABUR",
+    "DLF","ESCORTS","FEDERALBNK","GAIL","GODREJCP","GODREJPROP","HAVELLS",
+    "ICICIGI","IDFCFIRSTB","IGL","INDHOTEL","INDUSTOWER","IRCTC","JUBLFOOD",
+    "LICHSGFIN","LUPIN","MARICO","MCDOWELL-N","MFSL","MOTHERSON","MPHASIS",
+    "MRF","MUTHOOTFIN","NAUKRI","NMDC","OFSS","PAGEIND","PETRONET","PIDILITIND",
+    "PIIND","POLYCAB","RBLBANK","SIEMENS","SRF","TATACOMM","TORNTPHARM",
+    "ALKEM","ASTRAL","AUBANK","BALKRISIND","BATAINDIA","BEL","BHARATFORG","BHEL",
+    "CANFINHOME","CDSL","CESC","COFORGE","CROMPTON","DEEPAKNTR","DIXON",
+    "ENDURANCE","EXIDEIND","FORTIS","GLENMARK","GMRINFRA","GRANULES",
+    "HAPPSTMNDS","HINDPETRO","IDBI","IDFC","IEX","INDIAMART","INDIANB",
+    "INDIGO","IPCALAB","IRFC","JKCEMENT","JSWENERGY","KALPATPOWR",
+    "LAURUSLABS","LTIM","LTTS","MANAPPURAM","MAXHEALTH","METROPOLIS",
+    "NATCOPHARM","PERSISTENT","PHOENIXLTD","RITES","ROUTE","SAIL",
+    "SHREECEM","SOBHA","SONACOMS","SUNDARMFIN","SUNDRMFAST","SUPREMEIND",
+    "SYNGENE","TATACHEM","TATAELXSI","TATACONSUM","TATAMOTORS",
+    "UNIONBANK","VEDL","VOLTAS","ZOMATO","NYKAA","DELHIVERY","VBL",
+}
+
+POLL_INTERVAL_MINUTES = 5
+LOOKBACK_DAYS = 1
+SEEN_FILE = "/tmp/seen_announcements.json"
+
+NSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.nseindia.com/",
+}
+
+CATEGORIES = {
+    "results": {"emoji": "📊", "keywords": {"financial results","unaudited results","audited results","quarterly results","q1","q2","q3","q4","half yearly","annual results"}},
+    "dividend": {"emoji": "💰", "keywords": {"dividend","interim dividend","final dividend"}},
+    "bonus": {"emoji": "🎁", "keywords": {"bonus","stock split","sub-division","subdivision"}},
+    "board": {"emoji": "📅", "keywords": {"board meeting","meeting of board"}},
+    "merger": {"emoji": "🏢", "keywords": {"merger","acquisition","amalgamation","takeover","demerger","scheme of arrangement"}},
+}
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger(__name__)
+
+def load_seen():
+    if Path(SEEN_FILE).exists():
+        with open(SEEN_FILE) as f:
+            return set(json.load(f))
+    return set()
+
+def save_seen(seen):
+    with open(SEEN_FILE, "w") as f:
+        json.dump(list(seen), f)
+
+def get_nse_session():
+    s = requests.Session()
+    s.headers.update(NSE_HEADERS)
+    try:
+        s.get("https://www.nseindia.com", timeout=10)
+        time.sleep(1)
+    except Exception as e:
+        log.warning(f"NSE prefetch failed: {e}")
+    return s
+
+def get_category(subject):
+    subject_lower = subject.lower()
+    for cat, data in CATEGORIES.items():
+        if any(k in subject_lower for k in data["keywords"]):
+            return cat, data["emoji"]
+    return None, None
+
+def fetch_announcements(session):
+    today = datetime.now()
+    from_str = (today - timedelta(days=LOOKBACK_DAYS)).strftime("%d-%m-%Y")
+    to_str = today.strftime("%d-%m-%Y")
+    url = f"https://www.nseindia.com/api/corporate-announcements?index=equities&from_date={from_str}&to_date={to_str}"
+    try:
+        resp = session.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        log.error(f"NSE fetch failed: {e}")
+        return []
+    items = data if isinstance(data, list) else data.get("data", [])
+    results = []
+    for i in items:
+        symbol = (i.get("symbol") or "").upper()
+        if symbol not in WATCHLIST:
+            continue
+        subject = i.get("subject") or i.get("desc") or ""
+        cat, emoji = get_category(subject)
+        if cat:
+            i["_category"] = cat
+            i["_emoji"] = emoji
+            results.append(i)
+    return results
+
+def format_message(item):
+    symbol  = item.get("symbol", "—")
+    company = item.get("comp", item.get("company", symbol))
+    subject = item.get("subject") or item.get("desc") or ""
+    emoji   = item.get("_emoji", "📌")
+    cat     = item.get("_category", "").upper()
+    lines   = [f"{emoji} *{symbol}* — {company}", f"_{subject}_"]
+    if item.get("bm_date"): lines.append(f"📅 Board date: {item['bm_date']}")
+    if item.get("an_dt"):   lines.append(f"🕐 Filed: {item['an_dt']}")
+    att = item.get("attchmntFile", "")
+    if att:
+        if not att.startswith("http"): att = f"https://nsearchives.nseindia.com/corporate/{att}"
+        lines.append(f"📎 [View filing]({att})")
+    lines.append(f"\n`#{cat}` `#{symbol}`")
+    return "\n".join(lines)
+
+def send_telegram(message):
+    try:
+        resp = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id": CHANNEL_ID, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=10)
+        if resp.ok: log.info("Sent to Telegram")
+        else: log.error(f"Telegram error: {resp.text}")
+    except Exception as e:
+        log.error(f"Telegram failed: {e}")
+
+def job():
+    log.info("Checking NSE...")
+    seen  = load_seen()
+    items = fetch_announcements(get_nse_session())
+    new_count = 0
+    for item in items:
+        uid = f"{item.get('symbol','')}|{item.get('subject') or item.get('desc','')}|{item.get('bm_date') or item.get('an_dt','')}"
+        if uid in seen: continue
+        send_telegram(format_message(item))
+        seen.add(uid)
+        new_count += 1
+        time.sleep(1)
+    save_seen(seen)
+    log.info(f"{new_count} new announcement(s) sent.")
+
+log.info(f"Bot started. Top 200 stocks | 5 categories -> {CHANNEL_ID}")
+job()
+schedule.every(POLL_INTERVAL_MINUTES).minutes.do(job)
+while True:
+    schedule.run_pending()
+    time.sleep(30)
