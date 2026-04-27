@@ -170,7 +170,7 @@ def fetch_news(feed):
         root = ET.fromstring(resp.content)
         items = root.findall(".//item")
         results = []
-        for item in items[:5]:  # only latest 5 per feed
+        for item in items[:1]:  # only latest 5 per feed
             title   = item.findtext("title", "")
             link    = item.findtext("link", "")
             pubdate = item.findtext("pubDate", "")
