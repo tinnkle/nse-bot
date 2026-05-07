@@ -1,11 +1,11 @@
-import json, logging, time
+import json, logging, time, base64
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests, schedule
 
-BOT_TOKEN  = "8735425549:AAGF6XSW4Lz9iqXhRf4PGSAg4dyGCE260Rk"
-CHANNEL_ID = "@nseresultstinin"
-
+BOT_TOKEN   = "8735425549:AAGF6XSW4Lz9iqXhRf4PGSAg4dyGCE260Rk"
+CHANNEL_ID  = "@nseresultstinin"
+OPENAI_KEY  = "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"
 # Nifty 500 companies
 WATCHLIST = {
     # Nifty 50
@@ -39,37 +39,37 @@ WATCHLIST = {
     "APLLTD","APOLLOTYRE","AARTIIND","AAVAS","ABIRLANUVO","ADANIGAS",
     "ADANIPOWER","ATGL","AWL","BAJAJHLDNG","BAJAJELEC","BAYERCROP",
     "BFDL","BSOFT","CANARA","CANBK","CASTROLIND","CCL","CENTURYPLY",
-    "CENTURYTEX","CESC","CGPOWER","CHALET","CHAMBLFERT","CLEAN","CUB",
-    "CYIENT","DATAPATTNS","DBREALTY","DEEPAKFERT","DELHIVERY","DEVYANI",
+    "CENTURYTEX","CGPOWER","CHALET","CHAMBLFERT","CLEAN","CUB",
+    "CYIENT","DATAPATTNS","DBREALTY","DEEPAKFERT","DEVYANI",
     "EDELWEISS","ELGIEQUIP","EMAMILTD","EPIGRAL","EQUITASBNK","ESTER",
     "FINCABLES","FINPIPE","FLUOROCHEM","FMGOETZE","FSL","GESHIP",
     "GHCL","GNFC","GODFRYPHLP","GPPL","GRAPHITE","GRINDWELL",
     "GSPL","GUJGASLTD","HAPPYFORGE","HFCL","HIKAL","HSCL","HUDCO",
-    "IBREALEST","IFBIND","IGPL","IIFL","IMSHEALTH","INDIGOPNTS",
-    "INTELLECT","IOB","IONEXCHANG","IPCALAB","IRB","ISEC","ITDC",
-    "J&KBANK","JBCHEPHARM","JBMA","JINDALSAW","JINDALSTEL","JKLAKSHMI",
+    "IBREALEST","IFBIND","IGPL","IIFL","INDIGO","INDIGOPNTS",
+    "INTELLECT","IOB","IONEXCHANG","IRB","ISEC","ITDC",
+    "JBCHEPHARM","JBMA","JINDALSAW","JINDALSTEL","JKLAKSHMI",
     "JKPAPER","JKTYRE","JSL","JUBLINDS","JUSTDIAL","KAJARIACER",
     "KANSAINER","KEC","KFINTECH","KNRCON","KRBL","KSCL","LALPATHLAB",
-    "LATENTVIEW","LEMONTREE","LGBBROSLTD","LINDEINDIA","LLOYDMETAL",
-    "LXCHEM","MAHINDCIE","MASFIN","MAXHEALTH","MAZDA","MFSL",
-    "MIDHANI","MMTC","MOGSEC","MOREPENLAB","MPHASIS","MRPL",
-    "MUTHOOTFIN","NATCOPHARM","NAVINFLUOR","NBCC","NCC","NIACL",
-    "NLCINDIA","NSLNISP","NTPCGREEN","OBEROIRLTY","OFSS","OIL",
+    "LATENTVIEW","LEMONTREE","LINDEINDIA","LLOYDMETAL",
+    "LXCHEM","MAHINDCIE","MASFIN","MAZDA",
+    "MIDHANI","MMTC","MOREPENLAB","MRPL",
+    "NAVINFLUOR","NBCC","NCC","NIACL",
+    "NLCINDIA","NSLNISP","NTPCGREEN","OBEROIRLTY","OIL",
     "OLECTRA","ORIENTCEM","PNBHOUSING","PNCINFRA","POLICYBZR",
-    "PRAJIND","PRINCEPIPE","PRSMJOHNSN","PSBANK","PVRINOX","RADIOCITY",
+    "PRAJIND","PRINCEPIPE","PRSMJOHNSN","PVRINOX",
     "RAILTEL","RAJESHEXPO","RAYMOND","REDINGTON","RELAXO","RHIM",
-    "RITES","ROSSARI","RPOWER","RVNL","SAGCEM","SAPPHIRE","SCHAEFFLER",
-    "SHYAMMETL","SIGNATURE","SJVN","SKIPPER","SMSPHARMA","SOBHA",
-    "SOLARA","SOLARINDS","SPARC","SPANDANA","SRTRANSFIN","STAR",
-    "STARCEMENT","STLTECH","SUMICHEM","SUNCLAYLTD","SUNTECK","SUPRIYA",
-    "SUZLON","SWSOLAR","SYMPHONY","TANLA","TATAELXSI","TATAINVEST",
-    "TATATECH","TCNSBRANDS","TEJASNET","THERMAX","TIDEWATER","TIINDIA",
-    "TIMESGTY","TIMETECHNO","TITAGARH","TORNTPOWER","TRENT","TRIDENT",
-    "TRIVENI","TUBE","UJJIVANSFB","UNIPARTS","UNITDSPR","USHAMART",
-    "UTIAMC","VAIBHAVGBL","VARROC","VGUARD","VINATIORGA","VIPIND",
+    "ROSSARI","RPOWER","RVNL","SAPPHIRE","SCHAEFFLER",
+    "SHYAMMETL","SJVN","SKIPPER","SOBHA",
+    "SOLARA","SOLARINDS","SPARC","SPANDANA","SRTRANSFIN",
+    "STARCEMENT","STLTECH","SUMICHEM","SUNCLAYLTD","SUNTECK",
+    "SUZLON","SWSOLAR","SYMPHONY","TANLA","TATAINVEST",
+    "TATATECH","TEJASNET","THERMAX","TIINDIA",
+    "TITAGARH","TORNTPOWER","TRENT","TRIDENT",
+    "TRIVENI","UJJIVANSFB","UNIPARTS","USHAMART",
+    "UTIAMC","VAIBHAVGBL","VGUARD","VINATIORGA","VIPIND",
     "VMART","VOLTAMP","VRLLOG","VSTIND","WABCOINDIA","WELSPUNLIV",
-    "WENDT","WESTLIFE","WHIRLPOOL","WIPRO","WOCKPHARMA","WONDERLA",
-    "XCHANGING","YATHARTH","ZEEL","ZENSARTECH","ZIMLAB","ZYDUSLIFE",
+    "WESTLIFE","WHIRLPOOL","WOCKPHARMA","WONDERLA",
+    "YATHARTH","ZEEL","ZENSARTECH","ZYDUSLIFE",
 }
 
 CATEGORIES = {
@@ -147,26 +147,92 @@ def fetch_announcements(session):
             results.append(i)
     return results
 
+def get_ai_summary(pdf_url, symbol, company):
+    """Download PDF and send to GPT-4 for summary."""
+    try:
+        # Download PDF
+        pdf_resp = requests.get(pdf_url, timeout=20)
+        if not pdf_resp.ok:
+            return None
+        pdf_base64 = base64.b64encode(pdf_resp.content).decode("utf-8")
+
+        # Send to OpenAI
+        headers = {
+            "Authorization": f"Bearer {OPENAI_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-4o",
+            "max_tokens": 500,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"""You are a financial analyst. Summarize this {symbol} ({company}) quarterly results filing for a trader in India.
+
+Format exactly like this:
+Revenue: ₹X cr (±Y% YoY)
+Net Profit: ₹X cr (±Y% YoY)  
+EPS: ₹X vs ₹X last year
+EBITDA Margin: X% vs X% last year
+
+Verdict: 🟢 Beat / 🔴 Miss / 🟡 In-line
+One line on what matters most for the stock price."""
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:application/pdf;base64,{pdf_base64}"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        resp = requests.post("https://api.openai.com/v1/chat/completions",
+                           headers=headers, json=payload, timeout=30)
+        if resp.ok:
+            return resp.json()["choices"][0]["message"]["content"]
+        else:
+            log.error(f"OpenAI error: {resp.text}")
+            return None
+    except Exception as e:
+        log.error(f"AI summary failed: {e}")
+        return None
+
 def format_message(item):
     symbol  = item.get("symbol", "—")
     company = item.get("comp", item.get("company", symbol))
     subject = item.get("subject") or item.get("desc") or ""
     emoji   = item.get("_emoji", "📌")
     cat     = item.get("_category", "").upper()
-    lines   = [f"{emoji} *{symbol}* — {company}", f"_{subject}_"]
-    if item.get("bm_date"): lines.append(f"📅 Board date: {item['bm_date']}")
+    att     = item.get("attchmntFile", "")
+
+    if att and not att.startswith("http"):
+        att = f"https://nsearchives.nseindia.com/corporate/{att}"
+
+    lines = [f"{emoji} *{symbol}* — {company}", f"_{subject}_"]
+
+    # AI summary for results only
+    if item.get("_category") == "results" and att:
+        log.info(f"Getting AI summary for {symbol}...")
+        summary = get_ai_summary(att, symbol, company)
+        if summary:
+            lines.append(f"\n{summary}")
+
+    if item.get("bm_date"): lines.append(f"\n📅 Board date: {item['bm_date']}")
     if item.get("an_dt"):   lines.append(f"🕐 Filed: {item['an_dt']}")
-    att = item.get("attchmntFile", "")
-    if att:
-        if not att.startswith("http"): att = f"https://nsearchives.nseindia.com/corporate/{att}"
-        lines.append(f"📎 [View filing]({att})")
+    if att: lines.append(f"📎 [View filing]({att})")
     lines.append(f"\n`#NSE` `#{cat}` `#{symbol}`")
     return "\n".join(lines)
 
 def send_telegram(message):
     try:
         resp = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id": CHANNEL_ID, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=10)
+            json={"chat_id": CHANNEL_ID, "text": message, "parse_mode": "Markdown",
+                  "disable_web_page_preview": True}, timeout=10)
         if resp.ok: log.info("Sent to Telegram")
         else: log.error(f"Telegram error: {resp.text}")
     except Exception as e:
@@ -187,7 +253,7 @@ def job():
     save_seen(seen)
     log.info(f"{new_count} new announcement(s) sent.")
 
-log.info(f"Bot started. Nifty 500 stocks -> {CHANNEL_ID}")
+log.info(f"Bot started. Nifty 500 + AI Summaries -> {CHANNEL_ID}")
 job()
 schedule.every(POLL_INTERVAL_MINUTES).minutes.do(job)
 while True:
