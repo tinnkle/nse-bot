@@ -1,10 +1,10 @@
-import json, logging, time, os
+import json, logging, time
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests, schedule
 
-BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
-CHANNEL_ID = os.environ.get("CHANNEL_ID", "")
+BOT_TOKEN  = "8735425549:AAGVKtw8d3c1O8t4b6RzKPwOn-sYXqFW1-8"
+CHANNEL_ID = "@nseresultstinin"
 
 WATCHLIST = {
     "RELIANCE","TCS","HDFCBANK","ICICIBANK","INFY","HINDUNILVR","SBIN","BHARTIARTL",
