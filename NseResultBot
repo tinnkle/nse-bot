@@ -1,12 +1,12 @@
-import json, logging, time, base64, os
+import json, logging, time, os
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests, schedule
 
-# Read from environment variables — no keys in code
-BOT_TOKEN  = os.environ["BOT_TOKEN"]
-CHANNEL_ID = os.environ["CHANNEL_ID"]
-OPENAI_KEY = os.environ["OPENAI_KEY"]
+# Read from environment variables
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "")
+OPENAI_KEY = os.environ.get("OPENAI_KEY", "")
 
 # Nifty 500 companies
 WATCHLIST = {
@@ -140,46 +140,36 @@ def fetch_announcements(session):
             results.append(i)
     return results
 
-def get_ai_summary(pdf_url, symbol, company):
+def get_ai_summary(symbol, company, subject):
+    """Use GPT-4o with web search to find results and analyst expectations."""
     try:
-        pdf_resp = requests.get(pdf_url, timeout=20)
-        if not pdf_resp.ok:
-            return None
-        pdf_base64 = base64.b64encode(pdf_resp.content).decode("utf-8")
         headers = {
             "Authorization": f"Bearer {OPENAI_KEY}",
             "Content-Type": "application/json"
         }
         payload = {
             "model": "gpt-4o",
-            "max_tokens": 500,
+            "max_tokens": 400,
+            "tools": [{"type": "web_search_preview"}],
             "messages": [{
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"""You are a financial analyst. Summarize this {symbol} ({company}) quarterly results filing for a trader in India.
+                "content": f"""Search the web for {company} ({symbol}) latest quarterly results just announced today.
+Find actual revenue, net profit, EPS and compare with analyst estimates.
 
-Format exactly like this:
-Revenue: ₹X cr (±Y% YoY)
-Net Profit: ₹X cr (±Y% YoY)
-EPS: ₹X vs ₹X last year
-EBITDA Margin: X% vs X% last year
+Reply in exactly this format:
+Revenue: ₹X cr (±Y% YoY) vs est ₹X cr
+Net Profit: ₹X cr (±Y% YoY) vs est ₹X cr
+EPS: ₹X vs est ₹X
 
 Verdict: 🟢 Beat / 🔴 Miss / 🟡 In-line
-One line on what matters most for the stock price."""
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:application/pdf;base64,{pdf_base64}"}
-                    }
-                ]
+One line: what this means for the stock."""
             }]
         }
         resp = requests.post("https://api.openai.com/v1/chat/completions",
                            headers=headers, json=payload, timeout=30)
         if resp.ok:
-            return resp.json()["choices"][0]["message"]["content"]
+            content = resp.json()["choices"][0]["message"]["content"]
+            return content if content else None
         else:
             log.error(f"OpenAI error: {resp.text}")
             return None
@@ -196,12 +186,16 @@ def format_message(item):
     att     = item.get("attchmntFile", "")
     if att and not att.startswith("http"):
         att = f"https://nsearchives.nseindia.com/corporate/{att}"
+
     lines = [f"{emoji} *{symbol}* — {company}", f"_{subject}_"]
-    if item.get("_category") == "results" and att:
+
+    # AI summary for results only
+    if item.get("_category") == "results":
         log.info(f"Getting AI summary for {symbol}...")
-        summary = get_ai_summary(att, symbol, company)
+        summary = get_ai_summary(symbol, company, subject)
         if summary:
             lines.append(f"\n{summary}")
+
     if item.get("bm_date"): lines.append(f"\n📅 Board date: {item['bm_date']}")
     if item.get("an_dt"):   lines.append(f"🕐 Filed: {item['an_dt']}")
     if att: lines.append(f"📎 [View filing]({att})")
@@ -233,7 +227,7 @@ def job():
     save_seen(seen)
     log.info(f"{new_count} new announcement(s) sent.")
 
-log.info(f"Bot started. Nifty 500 + AI Summaries -> {CHANNEL_ID}")
+log.info(f"Bot started. Nifty 500 + AI Web Search Summaries -> {CHANNEL_ID}")
 job()
 schedule.every(POLL_INTERVAL_MINUTES).minutes.do(job)
 while True:
